@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "projects": {
+    "apigateway": {
+      "root": "apigateway",
+      "projectType": "application",
+      "targets": {
+        "build": {
+          "executor": "nx:run-commands",
+          "options": {
+            "command": "npm --prefix apigateway run build"
+          }
+        },
+        "start": {
+          "executor": "nx:run-commands",
+          "options": {
+            "command": "npm --prefix apigateway run start"
+          }
+        },
+        "start:dev": {
+          "executor": "nx:run-commands",
+          "options": { "command": "npm --prefix apigateway run start:dev" }
+        }
+      }
+    },
+    "auth-service": {
+      "root": "auth-service",
+      "projectType": "application",
+      "targets": {
+        "build": { "executor": "nx:run-commands", "options": { "command": "npm --prefix auth-service run build" } },
+        "start": { "executor": "nx:run-commands", "options": { "command": "npm --prefix auth-service run start" } },
+        "start:dev": { "executor": "nx:run-commands", "options": { "command": "npm --prefix auth-service run start:dev" } }
+      }
+    },
+    "file-management-service": {
+      "root": "file-management-service",
+      "projectType": "application",
+      "targets": {
+        "build": { "executor": "nx:run-commands", "options": { "command": "npm --prefix file-management-service run build" } },
+        "start": { "executor": "nx:run-commands", "options": { "command": "npm --prefix file-management-service run start" } },
+        "start:dev": { "executor": "nx:run-commands", "options": { "command": "npm --prefix file-management-service run start:dev" } }
+      }
+    },
+    "users-service": {
+      "root": "users-service",
+      "projectType": "application",
+      "targets": {
+        "build": { "executor": "nx:run-commands", "options": { "command": "npm --prefix users-service run build" } },
+        "start": { "executor": "nx:run-commands", "options": { "command": "npm --prefix users-service run start" } },
+        "start:dev": { "executor": "nx:run-commands", "options": { "command": "npm --prefix users-service run start:dev" } }
+      }
+    }
+  }
+}

@@ -1,0 +1,5 @@
+{
+  "scripts": {
+    "seed:prof-inspec": "npx tsx fillProfAndInspec.ts"
+  }
+}

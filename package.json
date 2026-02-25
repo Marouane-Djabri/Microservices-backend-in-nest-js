@@ -1,0 +1,16 @@
+{
+  "name": "nspe-microservices-examples",
+  "version": "0.0.1",
+  "private": false,
+  "license": "MIT",
+  "scripts": {
+    "nx": "nx",
+    "build:all": "npx nx run apigateway:build && npx nx run auth-service:build && npx nx run file-management-service:build && npx nx run users-service:build",
+    "start:all": "concurrently \"npx nx run apigateway:start\" \"npx nx run auth-service:start\" \"npx nx run file-management-service:start\" \"npx nx run users-service:start\"",
+    "lint": "echo \"No root lint configured\" && exit 0"
+  },
+  "devDependencies": {
+    "nx": "^16.0.0",
+    "concurrently": "^8.0.0"
+  }
+}

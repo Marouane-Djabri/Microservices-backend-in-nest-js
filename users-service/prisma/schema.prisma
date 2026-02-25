@@ -1,0 +1,166 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  INSPEC
+  PROF
+}
+
+enum TypeEtablissement {
+  PRIVEE
+  PUBLIQUE
+}
+
+enum Jours {
+  Dimanche
+  Lundi
+  Mardi
+  Mercredi
+  Jeudi
+}
+
+enum Horaire {
+  H08_09
+  H09_10
+  H10_11
+  H11_12
+  H12_13
+  H13_14
+  H14_15
+  H15_16
+  H16_17
+}
+
+enum Classe {
+  AM1
+  AM2
+  AM3
+  AM4
+}
+
+model User {
+  id                Int                 @id @default(autoincrement())
+  email             String              @unique
+  password          String
+  role              Role
+  createdAt         DateTime            @default(now())
+  uodatedAt         DateTime            @updatedAt
+  EmailVerification EmailVerification[]
+  Inspec            Inspec?
+  Prof              Prof?
+}
+
+model EmailVerification {
+  id         String    @id @default(cuid())
+  userId     Int
+  token      String    @unique
+  expiresAt  DateTime
+  verifiedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+model Circonscription {
+  id  Int    @id @default(autoincrement())
+  nom String
+
+  Etablissement Etablissement[]
+  Inspec        Inspec?
+}
+
+model Etablissement {
+  id                Int               @id @default(autoincrement())
+  nom               String
+  address           String?
+  telephone         String?
+  typeEtablissement TypeEtablissement
+  circonscription   Circonscription?  @relation(fields: [circonscriptionId], references: [id])
+  circonscriptionId Int?
+  Prof              Prof[]
+}
+
+model Inspec {
+  id                Int              @id @default(autoincrement())
+  nom               String?
+  prenom            String?
+  telephone         String?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  // the forerign key 
+  // defining the user relaation ship   : 
+  userId            Int              @unique
+  user              User             @relation(fields: [userId], references: [id])
+  circonscriptionId Int?             @unique
+  Circonscription   Circonscription? @relation(fields: [circonscriptionId], references: [id])
+}
+
+model Prof {
+  id                 Int             @id @unique @default(autoincrement())
+  etablissementId    Int?
+  etablissement      Etablissement?  @relation(fields: [etablissementId], references: [id])
+  nom                String?
+  prenom             String?
+  telephone          String?
+  userId             Int             @unique
+  User               User?           @relation(fields: [userId], references: [id])
+  Planning           Planning[]
+  CahierJournal      CahierJournal[]
+  dateNaissance      DateTime?
+  lieuNaissance      String?
+  nationalite        String?
+  situationFamiliale String?
+  nbEnfants          Int?
+  grade              String?
+  echelon            Int?
+  dateEffetEchelon   DateTime?
+  premNomin          DateTime?
+  premCofirm         DateTime?
+  dernVisite         DateTime?
+  note               Int?
+  profDiplome        profDiplome[]
+}
+
+model profDiplome {
+  id            Int       @id @default(autoincrement())
+  nom           String
+  lieu          String?
+  dateObtention DateTime?
+  profId        Int
+  Prof          Prof      @relation(fields: [profId], references: [id])
+}
+
+model Planning {
+  id      Int     @id @default(autoincrement())
+  jour    Jours
+  creneau Horaire
+  classe  Classe
+  type    String?
+  profId  Int
+  Prof    Prof    @relation(fields: [profId], references: [id])
+}
+
+// this model refers to a paper in cahier journal 
+model CahierJournal {
+  id          Int      @id @unique @default(autoincrement())
+  date        DateTime
+  classe      Classe?
+  description String?  @db.Text
+  observation String?  @db.Text
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  profId      Int
+  Prof        Prof     @relation(fields: [profId], references: [id])
+}
