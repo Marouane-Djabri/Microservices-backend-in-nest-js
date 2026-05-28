@@ -1,177 +1,201 @@
-# NSPE Microservices Monorepo (Nx) — Detailed README
+# Microservices Backend in NestJS
 
-This repository demonstrates a lightweight Nx monorepo setup for multiple NestJS microservices. It is intentionally non-invasive: each service keeps its own folder and package.json, and the workspace uses Nx `run-commands` to orchestrate builds and starts.
+This repository is an Nx-managed monorepo containing a NestJS API Gateway and three NestJS TCP microservices.
 
-Current projects
+## Architecture Overview
 
-- `apigateway` — API gateway that routes requests to internal services (NestJS)
-- `auth-service` — Authentication and authorization microservice (NestJS)
-- `file-management-service` — File and storage-related operations (NestJS)
-- `users-service` — User management, seeding scripts, and related workers (NestJS)
+The system follows a gateway + internal microservices pattern:
 
-Why this structure?
+- **API Gateway (`apigateway`)** exposes HTTP endpoints and Swagger docs.
+- **Users Service (`users-service`)** manages users, roles, profiles, planning, diplomas, and password-reset email triggers.
+- **Auth Service (`auth-service`)** issues and refreshes JWT access/refresh tokens.
+- **File Management Service (`file-management-service`)** manages Cahier Journal entries.
 
-- Keep existing service-level structure and scripts intact for minimal migration effort.
-- Use Nx as a thin orchestration layer to run scripts, provide unified commands, and later adopt more advanced Nx features (caching, generators, and coordinated builds).
-- Provide an example repository for teaching or bootstrapping microservice development with basic CI.
+### Runtime communication
 
-Repository contents (high level)
+- External clients call the API Gateway over HTTP.
+- Gateway communicates with internal services through **NestJS microservices transport: TCP**.
+- Services exchange messages via `ClientProxy.send(<pattern>, <payload>)` and `@MessagePattern(<pattern>)` handlers.
 
-- `nx.json`, `workspace.json`, `tsconfig.base.json` — workspace configuration.
-- `package.json` (root) — convenience scripts and devDependencies (nx, concurrently).
-- Service folders: `apigateway/`, `auth-service/`, `file-management-service/`, `users-service/` — each contains its own NestJS project and `package.json`.
-- `.github/workflows/ci.yml` — simple CI that builds all services on push/PR.
+## Service Topology
 
-Quickstart (Windows PowerShell)
+| Service | Type | Default Port | Main Responsibility |
+|---|---|---:|---|
+| `apigateway` | HTTP API | `3000` (`PORT` fallback) | Public API, request validation, auth guard, Swagger |
+| `users-service` | TCP microservice | `3001` | User lifecycle, inspector/professor domain operations |
+| `auth-service` | TCP microservice | `3002` | JWT credential generation + refresh |
+| `file-management-service` | TCP microservice | `3003` | Cahier Journal CRUD |
 
-1. Clone or prepare the repo locally.
+## Technical Details
 
-```powershell
-# clone (if on GitHub) or open the folder locally
-git clone https://github.com/<your-org-or-username>/<repo>.git
-cd <repo>
+### 1) API Gateway (`apigateway`)
+
+- Global prefix: `api`
+- Swagger UI: `/api`
+- CORS enabled (`*` origin)
+- Uses global `ValidationPipe`
+- Registers TCP clients:
+  - `USERS_SERVICE` -> `localhost:3001`
+  - `AUTH_SERVICE` -> `localhost:3002`
+  - `FILE_SERVICE` -> `localhost:3003`
+
+Main controller groups:
+
+- `auth/*` routes authentication and registration flows.
+- `inspec/*` routes inspector profile and inspector-linked data.
+- `prof/*` routes professor profile, planning, diplomas, and cahier journal.
+
+Security:
+
+- `AuthGuard` is registered globally via `APP_GUARD`.
+- Public endpoints are marked with `@Public()` metadata.
+- Role checks are implemented using custom guards (`IsInspec`, `IsProf`).
+
+### 2) Users Service (`users-service`)
+
+Transport:
+
+- Nest microservice over TCP on `3001`.
+
+Data and domain:
+
+- Uses **Prisma** with PostgreSQL (`users-service/prisma/schema.prisma`).
+- Core entities include:
+  - `User` with role (`INSPEC` / `PROF`)
+  - `Inspec`
+  - `Prof`
+  - `Planning`
+  - `profDiplome`
+  - `CahierJournal`
+  - `Circonscription`
+  - `Etablissement`
+
+Messaging examples:
+
+- `user-register`, `user-login`, `change-password`
+- `inspec-profile`, `inspec-update-profile`, `inspec-professeur`, `inspec-circonscription-etablissement`
+- `prof-profile`, `prof-update-profile`, `prof-get-inspec`
+- `prof-add-planning`, `perso-planning`, `perso-edit-planning`, `prof-delete-planning`
+- `prof-update-diplome`, `prof-add-diplome`, `prof-delete-diplome`
+- `new-paper-CJ`, `edit-paper-CJ`, `get-paper-CJ`, `delete-paper-CJ`
+
+Email integration:
+
+- Uses `@nestjs-modules/mailer` to send password reset/change notifications.
+
+### 3) Auth Service (`auth-service`)
+
+Transport:
+
+- Nest microservice over TCP on `3002`.
+
+Responsibilities:
+
+- Generates access + refresh tokens from user payload (`auth` pattern).
+- Validates refresh token and issues new access token (`refreshToken` pattern).
+
+Security implementation:
+
+- Uses `@nestjs/jwt`.
+- Token secrets are loaded from environment variables (see Environment section).
+
+### 4) File Management Service (`file-management-service`)
+
+Transport:
+
+- Nest microservice over TCP on `3003`.
+
+Responsibilities:
+
+- Handles Cahier Journal operations through message patterns:
+  - `create-paper-CJ`
+  - `get-cahier-journal`
+  - `delete-paper-CJ`
+  - `edit-paper-CJ`
+
+Data:
+
+- Uses Prisma + PostgreSQL schema in `file-management-service/prisma/schema.prisma`.
+
+## Repository Structure
+
+```text
+.
+├── apigateway/
+├── auth-service/
+├── users-service/
+├── file-management-service/
+├── workspace.json
+├── nx.json
+└── package.json
 ```
 
-2. Install dependencies (root-level dev tools and project deps). This repo keeps per-service dependencies in each service's `package.json`. Installing at root will install devDependencies declared at the root (nx, concurrently). Each service uses its own local dependencies when running via `npm --prefix`.
+- Nx is used as an orchestration layer.
+- Each service remains independently structured with its own `package.json` and scripts.
 
-```powershell
+## Environment Variables
+
+The code currently reads the following environment variables:
+
+- `PORT` (API Gateway HTTP port)
+- `ACCESS_SECRET`
+- `REFRESH_SECRET`
+- `Host` (SMTP host)
+- `Username` (SMTP username)
+- `Password` (SMTP password)
+- `DATABASE_URL` (Prisma/PostgreSQL connection URL in each Prisma service)
+
+## Local Development
+
+### Prerequisites
+
+- Node.js 18+
+- npm
+- PostgreSQL
+
+### Install dependencies
+
+```bash
 npm install
+npm --prefix apigateway ci
+npm --prefix auth-service ci
+npm --prefix users-service ci
+npm --prefix file-management-service ci
 ```
 
-3. Build all services (simple verification):
+### Build all services
 
-```powershell
+```bash
 npm run build:all
 ```
 
-4. Run a single service with Nx (example):
+### Start all services
 
-```powershell
-npx nx run apigateway:start
-```
-
-5. Run all services in parallel (for local development):
-
-```powershell
+```bash
 npm run start:all
 ```
 
-Development workflow and tips
+### Start one service
 
-- Each service is a standalone NestJS app. Use the service-level `package.json` scripts to build, test, and run (`npm --prefix <service> run <script>`).
-- To run tests for a specific service:
-
-```powershell
-npm --prefix users-service run test
-```
-
-- If you add shared code or utilities you want to reuse, consider converting the repo into a more typical Nx layout (move services into `apps/` and create shared `libs/`). I can automate that conversion.
-
-CI (GitHub Actions)
-
-- The included workflow `.github/workflows/ci.yml` runs on push and PR to `main`.
-- It performs:
-  - Checkout
-  - Install Node.js and run `npm ci`
-  - Run `npm run build:all` which builds each microservice using their existing `npm` scripts.
-
-Publishing this example to GitHub
-
-1. Create a repository on GitHub (e.g. `NSPE-insp/apigateway-example`).
-2. Push the local repo to GitHub:
-
-```powershell
-git init
-git add .
-git commit -m "chore: init Nx microservices example"
-git branch -M main
-git remote add origin https://github.com/<your-org-or-username>/<repo>.git
-git push -u origin main
-```
-
-3. The CI workflow will run automatically for pushes/PRs to `main`.
-
-Suggested GitHub repository description
-
-- Short: "Nx monorepo example: NestJS microservices (API gateway, auth, file management, users) with basic CI."
-
-Troubleshooting
-
-- If `npx nx` complains about missing packages, ensure you ran `npm install` at the root and that `nx` exists in `node_modules` or use `npx nx` which downloads it transiently.
-- If builds fail in CI due to missing service dependencies, run `npm --prefix <service> install` locally inside that service to verify dependency tree.
-- For long running or port collisions, use environment variables per service (each service supports `.env` files — add `.env.development` etc.).
-
-Roadmap / next improvements
-
-- Convert each service into Nx-managed apps under `apps/` and hoist shared devDependencies.
-- Add Nx caching and remote caching to speed up CI.
-- Add unit/integration tests to CI and linting steps.
-- Add Dockerfiles and a docker-compose example for local multi-service runs.
-
-Contributing
-
-- Fork and submit PRs. Keep each service’s changes contained to its folder unless you’re extracting shared libs.
-- Add descriptive commits and update this README when adding services or changing CI.
-
-License
-
-This example is provided under the MIT license — see `LICENSE`.
-
-Contact / Support
-
-- If you want help converting this into a fully Nx-native monorepo (apps/libs + hoisted deps + generators), tell me where to start and I’ll perform the migration steps.
-# Monorepo workspace (Nx)
-
-This repository contains multiple NestJS microservices. It has been organized as a lightweight Nx workspace so you can run and build the individual services from the repository root without moving files.
-
-Included projects:
-
-- `apigateway`
-- `auth-service`
-- `file-management-service`
-- `users-service`
-
-How to use
-
-1. Install root-level dev tools (nx is used as a CLI wrapper):
-
-```powershell
-npm install -g nx@latest
-npm install
-```
-
-2. Run a service via Nx (examples):
-
-```powershell
+```bash
 npx nx run apigateway:start
-npx nx run users-service:start:dev
-npx nx run auth-service:build
+npx nx run auth-service:start
+npx nx run users-service:start
+npx nx run file-management-service:start
 ```
 
-Notes
+## CI
 
-- This workspace uses run-commands targets that call each service's own npm scripts (no files were moved).
-- If you want a deeper Nx integration (workspace libs, caching across builds, generators), I can convert each service into proper Nx applications and hoist shared dependencies.
+GitHub Actions workflow: `.github/workflows/ci.yml`
 
-Publishing this example to GitHub
+Current pipeline:
 
-1. Create a new repository on GitHub (for example: `NSPE-insp/apigateway-example`).
-2. Push the existing folder to the new repository from your local machine:
+1. Checkout
+2. Setup Node 18
+3. `npm ci`
+4. `npm run build:all`
 
-```powershell
-git init
-git add .
-git commit -m "chore: init monorepo Nx example"
-git branch -M main
-git remote add origin https://github.com/<your-org-or-username>/<repo>.git
-git push -u origin main
-```
+## Notes
 
-3. The included GitHub Actions workflow (`.github/workflows/ci.yml`) will run on push and PR to `main` and execute `npm run build:all` to build all microservices.
-
-If you'd like, I can also:
-
-- Create the GitHub repository for you (requires a GitHub token or authorization),
-- Add more CI steps (lint, test, cache), or
-- Convert this into a fully Nx-managed monorepo with hoisted devDependencies.
-
+- This workspace uses legacy `workspace.json` project configuration for Nx command orchestration.
+- If you want to modernize Nx setup (`project.json` per app), you can migrate incrementally without changing service business logic.
